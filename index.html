@@ -170,12 +170,12 @@
     <script src="https://cesium.com/downloads/cesiumjs/releases/1.112/Build/Cesium/Cesium.js"></script>
 
     <script>
-        // Cesium Ion token (using default token for demo)
-        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlYWE1OWUxNy1mMWZiLTQzYjYtYTQ0OS1kMWFjYmFkNjc5YzciLCJpZCI6NTc3MzMsImlhdCI6MTYyNzg0NTE4Mn0.XcKpgANiY19MC4bdFUXMVEBToBmqS8kuYpUlxJHYZxk';
+        // Disable Cesium Ion (using free OpenStreetMap instead)
+        Cesium.Ion.defaultAccessToken = undefined;
 
-        // Initialize the Cesium Viewer
+        // Initialize the Cesium Viewer with OpenStreetMap imagery (no token required)
         const viewer = new Cesium.Viewer('cesiumContainer', {
-            baseLayerPicker: true,
+            baseLayerPicker: false,  // Disable base layer picker to avoid Ion dependency
             geocoder: true,
             homeButton: true,
             sceneModePicker: true,
@@ -183,7 +183,11 @@
             animation: false,
             timeline: false,
             fullscreenButton: true,
-            vrButton: false
+            vrButton: false,
+            imageryProvider: new Cesium.OpenStreetMapImageryProvider({
+                url: 'https://tile.openstreetmap.org/'
+            }),
+            terrainProvider: new Cesium.EllipsoidTerrainProvider()  // Use simple ellipsoid terrain
         });
 
         // Set initial camera position to show the whole Earth
