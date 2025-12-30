@@ -6,7 +6,7 @@
     <title>Цифровой Двойник Земли - Минеральные Ресурсы</title>
 
     <!-- Cesium CSS -->
-    <link href="https://cesium.com/downloads/cesiumjs/releases/1.112/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    <link href="libs/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
 
     <style>
         * {
@@ -167,9 +167,12 @@
     </div>
 
     <!-- Cesium JS -->
-    <script src="https://cesium.com/downloads/cesiumjs/releases/1.112/Build/Cesium/Cesium.js"></script>
+    <script src="libs/Build/Cesium/Cesium.js"></script>
 
     <script>
+        // Set Cesium base URL for Workers and Assets
+        window.CESIUM_BASE_URL = 'libs/Build/Cesium/';
+
         // Check if Cesium loaded successfully
         if (typeof Cesium === 'undefined') {
             document.body.innerHTML = `
@@ -180,12 +183,12 @@
                     <p style="margin-bottom: 15px;">Библиотека Cesium не загрузилась. Это может происходить по следующим причинам:</p>
                     <ul style="margin-bottom: 20px; padding-left: 20px;">
                         <li style="margin-bottom: 10px;"><strong>Файл открыт напрямую (file://)</strong> - Cesium требует веб-сервер</li>
-                        <li style="margin-bottom: 10px;"><strong>Нет подключения к интернету</strong> - Cesium загружается с CDN</li>
-                        <li style="margin-bottom: 10px;"><strong>Блокировка файрволом/антивирусом</strong> - Проверьте настройки безопасности</li>
+                        <li style="margin-bottom: 10px;"><strong>Файлы Cesium отсутствуют в папке libs/</strong> - Проверьте структуру проекта</li>
+                        <li style="margin-bottom: 10px;"><strong>Проблема с путями к файлам</strong> - Убедитесь, что запускаете сервер из корня проекта</li>
                     </ul>
                     <div style="background: rgba(76, 175, 80, 0.2); border-left: 4px solid #4CAF50; padding: 15px; border-radius: 4px; margin-bottom: 20px;">
                         <h3 style="margin-bottom: 10px; color: #4CAF50;">✅ Решение:</h3>
-                        <p style="margin-bottom: 10px;">Запустите локальный веб-сервер:</p>
+                        <p style="margin-bottom: 10px;">Запустите локальный веб-сервер из корневой папки проекта:</p>
                         <code style="display: block; background: rgba(0,0,0,0.4); padding: 10px; border-radius: 4px; font-family: monospace;">
                             python3 -m http.server 8000
                         </code>
