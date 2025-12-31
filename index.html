@@ -268,11 +268,6 @@
                 terrainProvider: new Cesium.EllipsoidTerrainProvider()  // Use simple ellipsoid terrain
             });
 
-            // Add error handler for imagery loading issues
-            viewer.scene.globe.imageryLayersLoadingEvent.addEventListener(function() {
-                console.log('Loading imagery tiles...');
-            });
-
             // Show a simple land/ocean coloring using the globe's base color
             viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#2C3E50');
 
