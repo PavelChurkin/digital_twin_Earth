@@ -170,9 +170,11 @@
     <script src="libs/Build/Cesium/Cesium.js"></script>
 
     <script>
-        // Set Cesium base URL for Workers and Assets
+        // Set Cesium base URL for Workers and Assets - must be set before Cesium initializes
         window.CESIUM_BASE_URL = 'libs/Build/Cesium/';
 
+        // Wait for DOM and Cesium to be fully loaded before initializing
+        function initializeCesium() {
         // Check if Cesium loaded successfully
         if (typeof Cesium === 'undefined') {
             document.body.innerHTML = `
@@ -234,12 +236,27 @@
         // Disable Cesium Ion (using free OpenStreetMap instead)
         Cesium.Ion.defaultAccessToken = undefined;
 
-        // Initialize the Cesium Viewer with OpenStreetMap imagery (no token required)
+        // Initialize the Cesium Viewer with fallback imagery options
         let viewer;
         try {
+            // Create imagery provider with multiple fallback options
+            let imageryProvider;
+            try {
+                // Try OpenStreetMap first (works in most countries)
+                imageryProvider = new Cesium.OpenStreetMapImageryProvider({
+                    url: 'https://tile.openstreetmap.org/'
+                });
+            } catch (e) {
+                console.warn('OpenStreetMap provider failed, using offline single tile:', e);
+                // Fallback: Use a single color tile (offline mode)
+                imageryProvider = new Cesium.SingleTileImageryProvider({
+                    url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+                });
+            }
+
             viewer = new Cesium.Viewer('cesiumContainer', {
                 baseLayerPicker: false,  // Disable base layer picker to avoid Ion dependency
-                geocoder: true,
+                geocoder: false,  // Disable geocoder (requires Ion)
                 homeButton: true,
                 sceneModePicker: true,
                 navigationHelpButton: true,
@@ -247,11 +264,18 @@
                 timeline: false,
                 fullscreenButton: true,
                 vrButton: false,
-                imageryProvider: new Cesium.OpenStreetMapImageryProvider({
-                    url: 'https://tile.openstreetmap.org/'
-                }),
+                imageryProvider: imageryProvider,
                 terrainProvider: new Cesium.EllipsoidTerrainProvider()  // Use simple ellipsoid terrain
             });
+
+            // Show a simple land/ocean coloring using the globe's base color
+            viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#2C3E50');
+
+            // Enable lighting for better visual appearance
+            viewer.scene.globe.enableLighting = false;  // Disable lighting to avoid shadows on blue globe
+
+            // Set globe color to show land/ocean differentiation
+            viewer.scene.globe.showGroundAtmosphere = true;
         } catch (error) {
             console.error('Failed to initialize Cesium Viewer:', error);
             document.body.innerHTML = `
@@ -295,6 +319,55 @@
         let allData = null;
         let currentDataSource = null;
         let commodities = new Set();
+
+        // Russian translations for commodity names
+        const commodityTranslations = {
+            'Gold': 'Золото',
+            'Silver': 'Серебро',
+            'Copper': 'Медь',
+            'Iron': 'Железо',
+            'Uranium': 'Уран',
+            'Coal': 'Уголь',
+            'Chromium': 'Хром',
+            'Tungsten': 'Вольфрам',
+            'Manganese': 'Марганец',
+            'Mercury': 'Ртуть',
+            'Tin': 'Олово',
+            'Lead': 'Свинец',
+            'Zinc': 'Цинк',
+            'Nickel': 'Никель',
+            'Platinum': 'Платина',
+            'Aluminum': 'Алюминий',
+            'Bauxite': 'Боксит',
+            'Diamond': 'Алмаз',
+            'Emerald': 'Изумруд',
+            'Ruby': 'Рубин',
+            'Sapphire': 'Сапфир',
+            'Lithium': 'Литий',
+            'Cobalt': 'Кобальт',
+            'Titanium': 'Титан',
+            'Vanadium': 'Ванадий',
+            'Molybdenum': 'Молибден',
+            'Phosphate': 'Фосфат',
+            'Potash': 'Поташ',
+            'Salt': 'Соль',
+            'Sulfur': 'Сера',
+            'Graphite': 'Графит',
+            'Talc': 'Тальк',
+            'Gypsum': 'Гипс',
+            'Limestone': 'Известняк',
+            'Marble': 'Мрамор',
+            'Granite': 'Гранит',
+            'Sand': 'Песок',
+            'Gravel': 'Гравий',
+            'Clay': 'Глина'
+        };
+
+        // Function to translate commodity name to Russian
+        function translateCommodity(commodity) {
+            if (!commodity) return 'Неизвестно';
+            return commodityTranslations[commodity] || commodity;
+        }
 
         // Color mapping for different commodities
         const commodityColors = {
@@ -354,13 +427,14 @@
                     }
                 });
 
-                // Populate commodity filter
+                // Populate commodity filter with Russian translations
                 const select = document.getElementById('commodityFilter');
                 const sortedCommodities = Array.from(commodities).sort();
                 sortedCommodities.forEach(commodity => {
                     const option = document.createElement('option');
                     option.value = commodity;
-                    option.textContent = commodity;
+                    // Show Russian translation with English name in parentheses
+                    option.textContent = `${translateCommodity(commodity)} (${commodity})`;
                     select.appendChild(option);
                 });
 
@@ -393,52 +467,159 @@
             }
         }
 
-        // Display data on globe
+        // Display data on globe using efficient PointPrimitiveCollection
         function displayData(geojson) {
-            // Remove previous data source if exists
+            // Remove previous data if exists
             if (currentDataSource) {
-                viewer.dataSources.remove(currentDataSource);
+                if (currentDataSource.primitives) {
+                    // Remove primitive collection
+                    viewer.scene.primitives.remove(currentDataSource.primitives);
+                } else {
+                    // Remove data source
+                    viewer.dataSources.remove(currentDataSource);
+                }
             }
-
-            // Create new data source
-            currentDataSource = new Cesium.CustomDataSource('mrds');
 
             let displayedCount = 0;
 
-            // Add points to the globe
-            geojson.features.forEach(feature => {
-                const coords = feature.properties;
-                const lon = feature.geometry.coordinates[0];
-                const lat = feature.geometry.coordinates[1];
-                const commodity = coords.commodity || 'Unknown';
+            // For large datasets (>10,000 points), use PointPrimitiveCollection (much more efficient)
+            if (geojson.features.length > 10000) {
+                console.log(`Loading ${geojson.features.length} points using efficient PointPrimitiveCollection`);
 
-                const entity = currentDataSource.entities.add({
-                    position: Cesium.Cartesian3.fromDegrees(lon, lat),
-                    point: {
-                        pixelSize: 5,
-                        color: getColorForCommodity(commodity),
-                        outlineColor: Cesium.Color.WHITE,
-                        outlineWidth: 1
-                    },
-                    description: `
-                        <h3>${coords.name}</h3>
-                        <p><strong>Ресурс:</strong> ${commodity}</p>
-                        ${coords.commodity2 ? `<p><strong>Доп. ресурс:</strong> ${coords.commodity2}</p>` : ''}
-                        ${coords.commodity3 ? `<p><strong>Доп. ресурс:</strong> ${coords.commodity3}</p>` : ''}
-                        <p><strong>Страна:</strong> ${coords.country}</p>
-                        ${coords.state ? `<p><strong>Штат/Регион:</strong> ${coords.state}</p>` : ''}
-                        <p><strong>Статус:</strong> ${coords.dev_status}</p>
-                        ${coords.url ? `<p><a href="${coords.url}" target="_blank">Подробнее</a></p>` : ''}
-                    `
+                // Create a point primitive collection (much more memory efficient for large datasets)
+                const pointPrimitives = viewer.scene.primitives.add(new Cesium.PointPrimitiveCollection());
+
+                // Store feature data for click handling
+                const featureData = [];
+
+                // Add points in batches to avoid blocking UI
+                const batchSize = 10000;
+                let currentBatch = 0;
+
+                function addBatch() {
+                    const start = currentBatch * batchSize;
+                    const end = Math.min(start + batchSize, geojson.features.length);
+
+                    for (let i = start; i < end; i++) {
+                        const feature = geojson.features[i];
+                        const coords = feature.properties;
+                        const lon = feature.geometry.coordinates[0];
+                        const lat = feature.geometry.coordinates[1];
+                        const commodity = coords.commodity || 'Unknown';
+
+                        const point = pointPrimitives.add({
+                            position: Cesium.Cartesian3.fromDegrees(lon, lat),
+                            pixelSize: 6,
+                            color: getColorForCommodity(commodity),
+                            outlineColor: Cesium.Color.WHITE,
+                            outlineWidth: 1,
+                            id: i  // Store index for click handling
+                        });
+
+                        // Store feature data separately
+                        featureData[i] = coords;
+                        displayedCount++;
+                    }
+
+                    // Update progress
+                    document.getElementById('pointCount').textContent = displayedCount.toLocaleString('ru-RU');
+
+                    currentBatch++;
+                    if (end < geojson.features.length) {
+                        // Schedule next batch
+                        setTimeout(addBatch, 0);
+                    } else {
+                        console.log(`Finished loading ${displayedCount} points`);
+                        document.getElementById('loadDataBtn').textContent = 'Данные загружены';
+                        document.getElementById('loading').classList.add('hidden');
+                    }
+                }
+
+                // Start loading batches
+                addBatch();
+
+                // Store reference for cleanup
+                currentDataSource = {
+                    primitives: pointPrimitives,
+                    featureData: featureData,
+                    geojson: geojson
+                };
+
+                // Add click handler for point primitives
+                const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+                handler.setInputAction(function(click) {
+                    const pickedObject = viewer.scene.pick(click.position);
+                    if (Cesium.defined(pickedObject) && Cesium.defined(pickedObject.primitive) &&
+                        pickedObject.primitive instanceof Cesium.PointPrimitive) {
+
+                        const pointId = pickedObject.primitive.id;
+                        if (featureData[pointId]) {
+                            const coords = featureData[pointId];
+                            const commodity = coords.commodity || 'Unknown';
+
+                            // Create description with Russian translations
+                            const description = `
+                                <div style="font-family: 'Segoe UI', sans-serif; max-width: 300px;">
+                                    <h3 style="margin-bottom: 10px; color: #4FC3F7;">${coords.name || 'Без названия'}</h3>
+                                    <p style="margin: 5px 0;"><strong>Ресурс:</strong> ${translateCommodity(commodity)}</p>
+                                    ${coords.commodity2 ? `<p style="margin: 5px 0;"><strong>Доп. ресурс:</strong> ${translateCommodity(coords.commodity2)}</p>` : ''}
+                                    ${coords.commodity3 ? `<p style="margin: 5px 0;"><strong>Доп. ресурс:</strong> ${translateCommodity(coords.commodity3)}</p>` : ''}
+                                    <p style="margin: 5px 0;"><strong>Страна:</strong> ${coords.country || 'Неизвестно'}</p>
+                                    ${coords.state ? `<p style="margin: 5px 0;"><strong>Штат/Регион:</strong> ${coords.state}</p>` : ''}
+                                    <p style="margin: 5px 0;"><strong>Статус:</strong> ${coords.dev_status || 'Неизвестно'}</p>
+                                    ${coords.url ? `<p style="margin: 5px 0;"><a href="${coords.url}" target="_blank" style="color: #4FC3F7;">Подробнее</a></p>` : ''}
+                                </div>
+                            `;
+
+                            viewer.selectedEntity = undefined;
+                            viewer.infoBox.frame.innerHTML = description;
+                            viewer.infoBox.viewModel.showInfo = true;
+                        }
+                    }
+                }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+            } else {
+                // For smaller datasets (<10,000 points), use entity-based rendering with click info
+                console.log(`Loading ${geojson.features.length} points using entity-based rendering`);
+
+                currentDataSource = new Cesium.CustomDataSource('mrds');
+
+                geojson.features.forEach(feature => {
+                    const coords = feature.properties;
+                    const lon = feature.geometry.coordinates[0];
+                    const lat = feature.geometry.coordinates[1];
+                    const commodity = coords.commodity || 'Unknown';
+
+                    const entity = currentDataSource.entities.add({
+                        position: Cesium.Cartesian3.fromDegrees(lon, lat),
+                        point: {
+                            pixelSize: 6,
+                            color: getColorForCommodity(commodity),
+                            outlineColor: Cesium.Color.WHITE,
+                            outlineWidth: 1
+                        },
+                        description: `
+                            <div style="font-family: 'Segoe UI', sans-serif; max-width: 300px;">
+                                <h3 style="margin-bottom: 10px; color: #4FC3F7;">${coords.name || 'Без названия'}</h3>
+                                <p style="margin: 5px 0;"><strong>Ресурс:</strong> ${translateCommodity(commodity)}</p>
+                                ${coords.commodity2 ? `<p style="margin: 5px 0;"><strong>Доп. ресурс:</strong> ${translateCommodity(coords.commodity2)}</p>` : ''}
+                                ${coords.commodity3 ? `<p style="margin: 5px 0;"><strong>Доп. ресурс:</strong> ${translateCommodity(coords.commodity3)}</p>` : ''}
+                                <p style="margin: 5px 0;"><strong>Страна:</strong> ${coords.country || 'Неизвестно'}</p>
+                                ${coords.state ? `<p style="margin: 5px 0;"><strong>Штат/Регион:</strong> ${coords.state}</p>` : ''}
+                                <p style="margin: 5px 0;"><strong>Статус:</strong> ${coords.dev_status || 'Неизвестно'}</p>
+                                ${coords.url ? `<p style="margin: 5px 0;"><a href="${coords.url}" target="_blank" style="color: #4FC3F7;">Подробнее</a></p>` : ''}
+                            </div>
+                        `
+                    });
+
+                    displayedCount++;
                 });
 
-                displayedCount++;
-            });
+                viewer.dataSources.add(currentDataSource);
 
-            viewer.dataSources.add(currentDataSource);
-
-            // Update stats
-            document.getElementById('pointCount').textContent = displayedCount.toLocaleString('ru-RU');
+                // Update stats
+                document.getElementById('pointCount').textContent = displayedCount.toLocaleString('ru-RU');
+            }
         }
 
         // Filter data by commodity
@@ -447,19 +628,31 @@
 
             if (!allData) return;
 
-            if (selectedCommodity === '') {
-                displayData(allData);
-            } else {
-                const filtered = {
-                    type: 'FeatureCollection',
-                    features: allData.features.filter(f =>
-                        f.properties.commodity === selectedCommodity ||
-                        f.properties.commodity2 === selectedCommodity ||
-                        f.properties.commodity3 === selectedCommodity
-                    )
-                };
-                displayData(filtered);
-            }
+            // Show loading indicator
+            const loadingDiv = document.getElementById('loading');
+            loadingDiv.classList.remove('hidden');
+
+            // Use setTimeout to allow UI to update before filtering starts
+            setTimeout(function() {
+                if (selectedCommodity === '') {
+                    displayData(allData);
+                } else {
+                    const filtered = {
+                        type: 'FeatureCollection',
+                        features: allData.features.filter(f =>
+                            f.properties.commodity === selectedCommodity ||
+                            f.properties.commodity2 === selectedCommodity ||
+                            f.properties.commodity3 === selectedCommodity
+                        )
+                    };
+                    displayData(filtered);
+                }
+
+                // Hide loading for small datasets (large datasets hide it in displayData)
+                if (!allData || allData.features.length <= 10000) {
+                    loadingDiv.classList.add('hidden');
+                }
+            }, 100);
         });
 
         // Load data button
@@ -470,6 +663,15 @@
             // Uncomment to auto-load:
             // loadData();
         });
+        } // End of initializeCesium function
+
+        // Initialize Cesium when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeCesium);
+        } else {
+            // DOM is already loaded, initialize immediately
+            initializeCesium();
+        }
     </script>
 </body>
 </html>
