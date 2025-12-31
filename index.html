@@ -624,7 +624,6 @@
             // Create description with Russian translations
             const description = `
                 <div style="font-family: 'Segoe UI', sans-serif; max-width: 300px;">
-                    <h3 style="margin-bottom: 10px; color: #4FC3F7;">${coords.name || 'Без названия'}</h3>
                     <p style="margin: 5px 0;"><strong>Ресурс:</strong> ${translateCommodity(commodity)}</p>
                     ${coords.commodity2 ? `<p style="margin: 5px 0;"><strong>Доп. ресурс:</strong> ${translateCommodity(coords.commodity2)}</p>` : ''}
                     ${coords.commodity3 ? `<p style="margin: 5px 0;"><strong>Доп. ресурс:</strong> ${translateCommodity(coords.commodity3)}</p>` : ''}
@@ -635,9 +634,15 @@
                 </div>
             `;
 
-            viewer.selectedEntity = undefined;
-            viewer.infoBox.frame.innerHTML = description;
-            viewer.infoBox.viewModel.showInfo = true;
+            // Create a temporary entity to display in the InfoBox
+            // This is the correct way to show the InfoBox programmatically in Cesium
+            const infoEntity = new Cesium.Entity({
+                name: coords.name || 'Без названия',
+                description: description
+            });
+
+            // Set the entity as selected to show the InfoBox
+            viewer.selectedEntity = infoEntity;
         }
 
         // Setup global click handler (called once)
